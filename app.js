@@ -344,6 +344,26 @@ function startSplitSession(){
   if(ti>=0){startFromTemplate(ti);}
   else{activeWorkout={name:next.name,startTime:Date.now(),exercises:[]};nav('log');}
 }
+function chooseSplitDay(dayIdx){
+  const split=getSplit();
+  if(!split)return;
+  const next=getNextSplitSession();
+  const sessionName=split.sessions[dayIdx];
+  if(!sessionName)return;
+  const doStart=()=>{
+    const ti=templates.findIndex(t=>t.name===sessionName);
+    if(ti>=0){startFromTemplate(ti);}
+    else{activeWorkout={name:sessionName,startTime:Date.now(),exercises:[]};nav('log');}
+  };
+  if(next&&dayIdx===next.dayIndex){doStart();return;}
+  showConfirm(
+    `Start ${esc(sessionName)}?`,
+    `Your split recommends <strong>${esc(next?next.name:'Day 1')}</strong> next. You can do this session instead — the split will continue from here.`,
+    'Start anyway',
+    'btn-primary',
+    doStart
+  );
+}
 function renderSplitCard(){
   const next=getNextSplitSession();
   if(!next)return'';
@@ -351,7 +371,7 @@ function renderSplitCard(){
   const chips=next.sessions.map((s,i)=>{
     const active=i===next.dayIndex;
     const label=short[s]||s.split(' ')[0];
-    return`<div style="flex:1;text-align:center;padding:5px 2px;border-radius:var(--r);font-size:10px;font-weight:${active?700:500};background:${active?'var(--accent)':'var(--bg3)'};color:${active?'#fff':'var(--text3)'};min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(label)}</div>`;
+    return`<div onclick="chooseSplitDay(${i})" style="flex:1;text-align:center;padding:5px 2px;border-radius:var(--r);font-size:10px;font-weight:${active?700:500};background:${active?'var(--accent)':'var(--bg3)'};color:${active?'#fff':'var(--text3)'};min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;transition:opacity .15s" onmouseenter="this.style.opacity='.75'" onmouseleave="this.style.opacity='1'">${esc(label)}</div>`;
   }).join('');
   return`<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:14px 16px;margin-bottom:16px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
