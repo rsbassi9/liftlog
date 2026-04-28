@@ -615,8 +615,9 @@ function renderLog(el,topR){
     </div>
   </div>`;
 
-  // Rest timer (only during live session)
+  // Rest timer (sticky so it stays visible while scrolling through exercises)
   if(!isEditing){
+    html+=`<div style="position:sticky;top:0;z-index:50;background:var(--bg);margin:0 -16px;padding:0 16px 6px;box-shadow:0 2px 8px rgba(0,0,0,.45)">`;
     if(!swExpanded){
       html+=`<div class="sw-collapsed" onclick="swExpanded=true;renderLog(document.getElementById('main'),document.getElementById('topbar-right'))">
         <div style="display:flex;align-items:center;gap:8px">
@@ -657,6 +658,7 @@ function renderLog(el,topR){
         </div>
       </div>`;
     }
+    html+=`</div>`; // close sticky wrapper
   }
 
   // AI suggestion panel
@@ -832,14 +834,16 @@ function renderSetRow(ex,ei,si,s){
   } else {
     weightInput=`<input type="number" class="set-input" min="0" step="0.5" placeholder="—" value="${wv}"
       id="wi-${ei}-${si}"
+      style="${s._ghost?'color:var(--text3)':''}"
       oninput="updateSet(${ei},${si},'weight_disp',this.value);checkLivePR(${ei},${si})"
-      onfocus="checkLivePR(${ei},${si})">`;
+      onfocus="clearGhostInput(${ei},${si},this);checkLivePR(${ei},${si})">`;
   }
 
   const repsInput=`<input type="number" class="set-input" min="0" placeholder="—" value="${s.reps||''}"
     id="ri-${ei}-${si}"
+    style="${s._ghost?'color:var(--text3)':''}"
     oninput="updateSet(${ei},${si},'reps',this.value);checkLivePR(${ei},${si})"
-    onfocus="checkLivePR(${ei},${si})"
+    onfocus="clearGhostInput(${ei},${si},this);checkLivePR(${ei},${si})"
     ondblclick="showSetActions(${ei},${si})">`;
 
   // RPE as native select — one tap shows all options, OS handles the picker UI
@@ -1964,6 +1968,19 @@ function updateSetNote(ei,si,val){
 function autoResizeNote(ta){
   ta.style.height='auto';
   ta.style.height=Math.min(ta.scrollHeight,80)+'px';
+}
+function clearGhostInput(ei,si,el){
+  const wo=editingWorkout?editingWorkout.workout:activeWorkout;
+  if(!wo||!wo.exercises[ei])return;
+  const s=wo.exercises[ei].sets[si];
+  if(s&&s._ghost){
+    s._ghost=false;
+    const ri=document.getElementById(`ri-${ei}-${si}`);
+    const wi=document.getElementById(`wi-${ei}-${si}`);
+    if(ri)ri.style.color='';
+    if(wi)wi.style.color='';
+    el.select();
+  }
 }
 function getLastExerciseNotes(name){
   for(let i=workouts.length-1;i>=0;i--){
@@ -3453,7 +3470,8 @@ function startFromTemplate(i){
           reps:s.reps,
           weight:s.weight?(Math.round((parseFloat(s.weight)+bump)*4)/4):undefined,
           _progressed:bump>0&&s.weight,
-          notes:s.notes||(e.sets&&e.sets[idx]?e.sets[idx].notes:undefined)
+          notes:s.notes||(e.sets&&e.sets[idx]?e.sets[idx].notes:undefined),
+          _ghost:true
         }));
       }
     }
