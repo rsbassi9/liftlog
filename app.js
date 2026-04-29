@@ -618,7 +618,12 @@ function renderLog(el,topR){
     </div>
   </div>`;
 
-  // Timer is rendered into #sw-fixed-bar (outside #main) via renderSwBar()
+  // Rest timer — sticky inside #main (works because #app is height:100dvh)
+  if(!isEditing){
+    html+=`<div style="position:sticky;top:0;z-index:50;background:var(--bg);margin:0 -16px;padding:0 16px 6px;border-bottom:1px solid var(--border)">`;
+    html+=getSwHtml();
+    html+=`</div>`;
+  }
 
   // AI suggestion panel
   html+=renderAISuggestions(wo);
@@ -647,7 +652,10 @@ function renderLog(el,topR){
       },1000);
     }
     if(swRunning||swLaps.length) swExpanded=true;
-    renderSwBar();
+    swRefreshDisplay();
+    swRefreshLaps();
+    const mini=document.getElementById('sw-display-mini');
+    if(mini)mini.textContent=swFmt(swMs);
     initDragSort();
   }
 }
@@ -2161,7 +2169,7 @@ function swStartFresh(){
 }
 function getSwHtml(){
   if(!swExpanded){
-    return`<div class="sw-collapsed" onclick="swExpanded=true;renderSwBar()">
+    return`<div class="sw-collapsed" onclick="swExpanded=true;renderLog(document.getElementById('main'),document.getElementById('topbar-right'))">
       <div style="display:flex;align-items:center;gap:8px">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
         <span style="font-size:11px;color:var(--text3)">Rest timer</span>
@@ -2181,7 +2189,7 @@ function getSwHtml(){
     return`<div class="sw-expanded" style="margin-bottom:0">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
         <span style="font-size:11px;color:var(--text3);font-weight:600;letter-spacing:.5px">REST TIMER</span>
-        <button class="btn-ghost" style="font-size:11px;padding:2px 8px" onclick="swExpanded=false;renderSwBar()">Collapse</button>
+        <button class="btn-ghost" style="font-size:11px;padding:2px 8px" onclick="swExpanded=false;renderLog(document.getElementById('main'),document.getElementById('topbar-right'))">Collapse</button>
       </div>
       <div class="stopwatch" id="sw-bar">
         <button class="sw-btn sw-reset" onclick="swReset()" title="Reset">
@@ -3872,7 +3880,7 @@ function onDragEnd(){
 }
 
 function seedBassiTemplates(){
-  if(currentUser!=='Bassi'&&currentUser!=='Ham')return;
+  if(currentUser!=='Bassi'&&currentUser!=='Ham'&&currentUser!=='Jana')return;
   // Seed split regardless of whether templates already exist
   if(!DB.get('split_'+currentUser,null)){
     DB.set('split_'+currentUser,{
