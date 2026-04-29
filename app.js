@@ -309,6 +309,9 @@ function render(){
   const topR=document.getElementById('topbar-right');
   main.innerHTML='';
   topR.innerHTML='';
+  // Hide timer bar on non-log screens
+  const swBar=document.getElementById('sw-fixed-bar');
+  if(swBar&&currentScreen!=='log'){swBar.style.display='none';swBar.innerHTML='';}
   const meta=USERS_META[currentUser]||{};
   const logo=document.getElementById('logo-area');
   if(logo)logo.innerHTML=`Lift<span style="color:var(--accent2)">Log</span> <span style="font-size:11px;font-weight:500;padding:2px 8px;border-radius:100px;background:${meta.bg};color:${meta.color};margin-left:4px;vertical-align:middle;cursor:pointer" onclick="switchUser()">${currentUser} ↩</span>`;
@@ -615,51 +618,7 @@ function renderLog(el,topR){
     </div>
   </div>`;
 
-  // Rest timer (sticky so it stays visible while scrolling through exercises)
-  if(!isEditing){
-    html+=`<div style="position:sticky;top:0;z-index:50;background:var(--bg);margin:0 -16px;padding:0 16px 6px;box-shadow:0 2px 8px rgba(0,0,0,.45)">`;
-    if(!swExpanded){
-      html+=`<div class="sw-collapsed" onclick="swExpanded=true;renderLog(document.getElementById('main'),document.getElementById('topbar-right'))">
-        <div style="display:flex;align-items:center;gap:8px">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-          <span style="font-size:11px;color:var(--text3)">Rest timer</span>
-        </div>
-        <div class="sw-collapsed-display${swRunning?' running':''}" id="sw-display-mini">${swFmt(swMs)}</div>
-        <div style="display:flex;gap:6px;align-items:center">
-          <button class="sw-btn sw-start" style="width:32px;height:32px" id="sw-toggle-mini" onclick="event.stopPropagation();swToggle();updateSwMini()">
-            <svg id="sw-play-mini" width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="display:${swRunning?'none':'block'}"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-            <svg id="sw-pause-mini" width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="display:${swRunning?'block':'none'}"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
-          </button>
-          <button class="sw-btn sw-reset" style="width:32px;height:32px" onclick="event.stopPropagation();swReset();updateSwMini()">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.5"/></svg>
-          </button>
-        </div>
-      </div>`;
-    } else {
-      html+=`<div class="sw-expanded">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-          <span style="font-size:11px;color:var(--text3);font-weight:600;letter-spacing:.5px">REST TIMER</span>
-          <button class="btn-ghost" style="font-size:11px;padding:2px 8px" onclick="swExpanded=false;renderLog(document.getElementById('main'),document.getElementById('topbar-right'))">Collapse</button>
-        </div>
-        <div class="stopwatch" id="sw-bar">
-          <button class="sw-btn sw-reset" onclick="swReset()" title="Reset">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.5"/></svg>
-          </button>
-          <div class="sw-display stopped" id="sw-display">0:00.0</div>
-          <button class="sw-btn sw-start" id="sw-toggle-btn" onclick="swToggle()" title="Start">
-            <svg id="sw-play-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-            <svg id="sw-pause-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="display:none"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
-          </button>
-          <button class="sw-btn sw-stop" onclick="swLap()" title="Lap" style="width:36px;height:36px;border-radius:8px;font-size:10px;font-weight:600;font-family:var(--mono)">LAP</button>
-        </div>
-        <div class="sw-laps" id="sw-laps-bar">
-          <div style="font-size:10px;color:var(--text3);letter-spacing:.5px;font-weight:600">LAPS</div>
-          <div class="sw-lap-list" id="sw-lap-list"></div>
-        </div>
-      </div>`;
-    }
-    html+=`</div>`; // close sticky wrapper
-  }
+  // Timer is rendered into #sw-fixed-bar (outside #main) via renderSwBar()
 
   // AI suggestion panel
   html+=renderAISuggestions(wo);
@@ -687,14 +646,9 @@ function renderLog(el,topR){
         if(t)t.textContent=formatDuration(Math.floor((Date.now()-activeWorkout.startTime)/1000));
       },1000);
     }
-    // Auto-expand stopwatch if running or has laps
     if(swRunning||swLaps.length) swExpanded=true;
-    // Restore stopwatch display state after re-render
-    swRefreshDisplay();
-    swRefreshLaps();
-    // Keep mini display in sync
-    const mini=document.getElementById('sw-display-mini');
-    if(mini) mini.textContent=swFmt(swMs);
+    renderSwBar();
+    initDragSort();
   }
 }
 
@@ -2204,6 +2158,59 @@ function swStartFresh(){
   swToggle();
   swExpanded=false;
   updateSwMini();
+}
+function getSwHtml(){
+  if(!swExpanded){
+    return`<div class="sw-collapsed" onclick="swExpanded=true;renderSwBar()">
+      <div style="display:flex;align-items:center;gap:8px">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        <span style="font-size:11px;color:var(--text3)">Rest timer</span>
+      </div>
+      <div class="sw-collapsed-display${swRunning?' running':''}" id="sw-display-mini">${swFmt(swMs)}</div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <button class="sw-btn sw-start" style="width:32px;height:32px" id="sw-toggle-mini" onclick="event.stopPropagation();swToggle();updateSwMini()">
+          <svg id="sw-play-mini" width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="display:${swRunning?'none':'block'}"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          <svg id="sw-pause-mini" width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="display:${swRunning?'block':'none'}"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+        </button>
+        <button class="sw-btn sw-reset" style="width:32px;height:32px" onclick="event.stopPropagation();swReset();updateSwMini()">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.5"/></svg>
+        </button>
+      </div>
+    </div>`;
+  } else {
+    return`<div class="sw-expanded" style="margin-bottom:0">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <span style="font-size:11px;color:var(--text3);font-weight:600;letter-spacing:.5px">REST TIMER</span>
+        <button class="btn-ghost" style="font-size:11px;padding:2px 8px" onclick="swExpanded=false;renderSwBar()">Collapse</button>
+      </div>
+      <div class="stopwatch" id="sw-bar">
+        <button class="sw-btn sw-reset" onclick="swReset()" title="Reset">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.5"/></svg>
+        </button>
+        <div class="sw-display stopped" id="sw-display">0:00.0</div>
+        <button class="sw-btn sw-start" id="sw-toggle-btn" onclick="swToggle()" title="Start">
+          <svg id="sw-play-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          <svg id="sw-pause-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="display:none"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+        </button>
+        <button class="sw-btn sw-stop" onclick="swLap()" title="Lap" style="width:36px;height:36px;border-radius:8px;font-size:10px;font-weight:600;font-family:var(--mono)">LAP</button>
+      </div>
+      <div class="sw-laps" id="sw-laps-bar">
+        <div style="font-size:10px;color:var(--text3);letter-spacing:.5px;font-weight:600">LAPS</div>
+        <div class="sw-lap-list" id="sw-lap-list"></div>
+      </div>
+    </div>`;
+  }
+}
+function renderSwBar(){
+  const bar=document.getElementById('sw-fixed-bar');
+  if(!bar)return;
+  if(!activeWorkout||currentScreen!=='log'){bar.style.display='none';bar.innerHTML='';return;}
+  bar.style.display='block';
+  bar.innerHTML=getSwHtml();
+  swRefreshDisplay();
+  swRefreshLaps();
+  const mini=document.getElementById('sw-display-mini');
+  if(mini)mini.textContent=swFmt(swMs);
 }
 function swToggle(){
   if(swRunning){
@@ -3761,6 +3768,109 @@ function copyShareText(text){
 // ════════════════════════════════════════════
 // USER PORTAL
 // ════════════════════════════════════════════
+// ════════════════════════════════════════════
+// DRAG TO REORDER EXERCISES
+// ════════════════════════════════════════════
+let _drag=null,_liftTimer=null,_preLift=null;
+
+function initDragSort(){
+  const wo=activeWorkout;
+  if(!wo)return;
+  wo.exercises.forEach((_,ei)=>{
+    const el=document.getElementById(`exblock-${ei}`);
+    if(!el)return;
+    el.addEventListener('touchstart',e=>{
+      if(_drag)return;
+      const t=e.touches[0];
+      _preLift={x:t.clientX,y:t.clientY,ei};
+      _liftTimer=setTimeout(()=>{
+        if(_preLift&&_preLift.ei===ei){liftBlock(ei,t);_preLift=null;}
+      },500);
+    },{passive:true});
+  });
+  const main=document.getElementById('main');
+  if(!main)return;
+  if(main._dlMove)main.removeEventListener('touchmove',main._dlMove);
+  if(main._dlEnd)main.removeEventListener('touchend',main._dlEnd);
+  main._dlMove=e=>{
+    if(_drag||!_preLift)return;
+    const t=e.touches[0];
+    if(Math.abs(t.clientX-_preLift.x)>8||Math.abs(t.clientY-_preLift.y)>8){
+      clearTimeout(_liftTimer);_preLift=null;
+    }
+  };
+  main._dlEnd=()=>{clearTimeout(_liftTimer);_preLift=null;};
+  main.addEventListener('touchmove',main._dlMove,{passive:true});
+  main.addEventListener('touchend',main._dlEnd,{passive:true});
+}
+
+function liftBlock(ei,touch){
+  const el=document.getElementById(`exblock-${ei}`);
+  if(!el||_drag)return;
+  if(navigator.vibrate)navigator.vibrate(40);
+  const rect=el.getBoundingClientRect();
+  const clone=el.cloneNode(true);
+  Object.assign(clone.style,{
+    position:'fixed',top:rect.top+'px',left:rect.left+'px',
+    width:rect.width+'px',zIndex:'200',opacity:'0.96',
+    boxShadow:'0 12px 32px rgba(0,0,0,.7)',
+    transform:'scale(1.03)',transition:'transform .1s,box-shadow .1s',
+    pointerEvents:'none',borderColor:'var(--accent)',borderRadius:'var(--r2)'
+  });
+  document.body.appendChild(clone);
+  el.style.opacity='0.2';
+  _drag={ei,clone,el,offsetY:touch.clientY-rect.top,targetEi:ei,insertBefore:false};
+  document.addEventListener('touchmove',onDragMove,{passive:false});
+  document.addEventListener('touchend',onDragEnd,{once:true,passive:true});
+}
+
+function onDragMove(e){
+  if(!_drag)return;
+  e.preventDefault();
+  const dragY=e.touches[0].clientY;
+  _drag.clone.style.top=(dragY-_drag.offsetY)+'px';
+  const wo=activeWorkout;
+  if(!wo)return;
+  let targetEi=null,insertBefore=false;
+  for(let i=0;i<wo.exercises.length;i++){
+    if(i===_drag.ei)continue;
+    const b=document.getElementById(`exblock-${i}`);
+    if(!b)continue;
+    const r=b.getBoundingClientRect();
+    if(dragY<r.top+r.height/2){targetEi=i;insertBefore=true;break;}
+    targetEi=i;insertBefore=false;
+  }
+  if(targetEi===null)return;
+  if(targetEi!==_drag.targetEi||insertBefore!==_drag.insertBefore){
+    _drag.targetEi=targetEi;_drag.insertBefore=insertBefore;
+    document.querySelectorAll('.drag-indicator').forEach(d=>d.remove());
+    const tb=document.getElementById(`exblock-${targetEi}`);
+    if(tb){
+      const ind=document.createElement('div');
+      ind.className='drag-indicator';
+      tb.insertAdjacentElement(insertBefore?'beforebegin':'afterend',ind);
+    }
+  }
+}
+
+function onDragEnd(){
+  if(!_drag)return;
+  document.removeEventListener('touchmove',onDragMove);
+  const{ei,targetEi,insertBefore,clone,el}=_drag;
+  _drag=null;
+  clone.remove();
+  document.querySelectorAll('.drag-indicator').forEach(d=>d.remove());
+  el.style.opacity='';
+  if(ei!==targetEi&&activeWorkout){
+    const exs=activeWorkout.exercises;
+    const[moved]=exs.splice(ei,1);
+    let idx=insertBefore?(targetEi>ei?targetEi-1:targetEi):(targetEi>ei?targetEi-1:targetEi)+1;
+    idx=Math.max(0,Math.min(idx,exs.length));
+    exs.splice(idx,0,moved);
+  }
+  renderLog(document.getElementById('main'),document.getElementById('topbar-right'));
+}
+
 function seedBassiTemplates(){
   if(currentUser!=='Bassi'&&currentUser!=='Ham')return;
   // Seed split regardless of whether templates already exist
