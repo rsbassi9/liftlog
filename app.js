@@ -3881,8 +3881,10 @@ function onDragEnd(){
 
 function seedBassiTemplates(){
   if(currentUser!=='Bassi'&&currentUser!=='Ham'&&currentUser!=='Jana')return;
-  // Seed split for Bassi and Ham only
-  if(currentUser!=='Jana'&&!DB.get('split_'+currentUser,null)){
+  // Split for Bassi and Ham only — remove it if Jana has one from a previous session
+  if(currentUser==='Jana'){
+    localStorage.removeItem('ll_split_Jana');
+  } else if(!DB.get('split_'+currentUser,null)){
     DB.set('split_'+currentUser,{
       name:'My 6-Day Split',
       sessions:['Legs (Quads)','Upper','Shoulders + Arms','Legs (Hamstrings)','Push','Pull']
