@@ -3881,8 +3881,8 @@ function onDragEnd(){
 
 function seedBassiTemplates(){
   if(currentUser!=='Bassi'&&currentUser!=='Ham'&&currentUser!=='Jana')return;
-  // Seed split regardless of whether templates already exist
-  if(!DB.get('split_'+currentUser,null)){
+  // Seed split for Bassi and Ham only
+  if(currentUser!=='Jana'&&!DB.get('split_'+currentUser,null)){
     DB.set('split_'+currentUser,{
       name:'My 6-Day Split',
       sessions:['Legs (Quads)','Upper','Shoulders + Arms','Legs (Hamstrings)','Push','Pull']
