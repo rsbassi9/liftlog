@@ -13,7 +13,7 @@
 body { background:var(--bg); color:var(--text); font-family:var(--sans); font-size:14px; line-height:1.5; min-height:100vh; overscroll-behavior:none; }
 
 /* Layout */
-#app { display:flex; flex-direction:column; min-height:100vh; max-width:480px; margin:0 auto; }
+#app { display:flex; flex-direction:column; height:100vh; height:100dvh; max-width:480px; margin:0 auto; overflow:hidden; }
 #topbar { position:sticky; top:0; z-index:100; background:rgba(14,14,16,.92); backdrop-filter:blur(12px); border-bottom:1px solid var(--border); padding:0 16px; height:52px; display:flex; align-items:center; justify-content:space-between; }
 #topbar .logo { font-size:17px; font-weight:700; letter-spacing:-.5px; }
 #topbar .logo span { color:var(--accent2); }
