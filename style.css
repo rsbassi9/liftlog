@@ -261,17 +261,28 @@ select option { background:var(--bg3); }
 .fadeIn { animation:fadeIn .2s ease; }
 
 /* User portal */
-#user-portal { position:fixed; inset:0; z-index:500; background:var(--bg); display:flex; flex-direction:column; align-items:center; justify-content:center; padding:32px 24px; }
+#user-portal { position:fixed; inset:0; z-index:500; background:var(--bg); display:flex; flex-direction:column; align-items:center; justify-content:center; padding:32px 24px; text-align:center; }
 #user-portal.hidden { display:none; }
 .portal-logo { font-size:28px; font-weight:700; letter-spacing:-1px; margin-bottom:8px; }
 .portal-logo span { color:var(--accent2); }
-.portal-sub { font-size:14px; color:var(--text2); margin-bottom:40px; }
+.portal-sub { font-size:14px; color:var(--text2); margin-bottom:28px; max-width:320px; }
+#google-signin { min-height:44px; display:flex; align-items:center; justify-content:center; margin-bottom:12px; }
+.auth-demo-btn { display:none; margin-top:4px; }
+.auth-setup-note { min-height:32px; max-width:330px; margin-top:16px; font-size:12px; color:var(--orange); line-height:1.5; }
 .user-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; width:100%; max-width:360px; }
 .user-card { background:var(--bg2); border:1px solid var(--border); border-radius:var(--r2); padding:20px 12px; display:flex; flex-direction:column; align-items:center; gap:10px; cursor:pointer; transition:all .15s; }
 .user-card:hover { border-color:var(--accent); background:var(--bg3); }
 .user-avatar { width:52px; height:52px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:18px; font-weight:700; font-family:var(--mono); }
 .user-name { font-size:14px; font-weight:600; }
 .user-stats { font-size:10px; color:var(--text3); font-family:var(--mono); }
+.account-chip { display:inline-flex; align-items:center; gap:5px; margin-left:6px; padding:2px 8px 2px 3px; border-radius:100px; border:1px solid rgba(124,109,250,.28); background:var(--accent-bg); color:var(--accent2); font-family:var(--sans); font-size:11px; font-weight:600; vertical-align:middle; cursor:pointer; }
+.account-chip span { width:18px; height:18px; display:inline-flex; align-items:center; justify-content:center; border-radius:50%; background:var(--accent); color:#fff; font-family:var(--mono); font-size:9px; }
+.account-modal-head { display:flex; align-items:center; gap:12px; padding:12px; background:var(--bg3); border:1px solid var(--border); border-radius:var(--r2); margin-bottom:12px; }
+.account-modal-avatar { width:44px; height:44px; border-radius:50%; background:var(--accent); color:#fff; display:flex; align-items:center; justify-content:center; font-family:var(--mono); font-weight:700; flex-shrink:0; }
+.account-modal-name { font-size:15px; font-weight:700; }
+.account-modal-email { font-size:12px; color:var(--text2); word-break:break-all; }
+.account-modal-profile { font-size:11px; color:var(--accent2); margin-top:3px; }
+.auth-privacy-note { font-size:12px; color:var(--text2); line-height:1.6; margin-bottom:16px; text-align:left; }
 
 /* PR deep-dive */
 .pr-rep-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px; }

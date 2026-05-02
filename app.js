@@ -1,7 +1,21 @@
 // ═══ DB ═══
 const DB = {
   get(k,def){try{const v=JSON.parse(localStorage.getItem('ll_'+k));return v!==null?v:def;}catch{return def;}},
-  set(k,v){localStorage.setItem('ll_'+k,JSON.stringify(v));}
+  set(k,v){localStorage.setItem('ll_'+k,JSON.stringify(v));},
+  del(k){localStorage.removeItem('ll_'+k);}
+};
+
+// Set this to your Google OAuth 2.0 Web client ID from Google Cloud.
+// Example: const GOOGLE_CLIENT_ID = '1234567890-abc.apps.googleusercontent.com';
+const GOOGLE_CLIENT_ID = '';
+
+// Google accounts that should claim the original local profiles.
+// Add Harman's Google email here when you have it, for example:
+// 'harman.email@gmail.com':'Ham',
+const LEGACY_PROFILE_CLAIMS = {
+  'rajvir.bassi95@gmail.com':'Bassi',
+  'janarrolland@gmail.com':'Jana',
+  'harman.bassi@hotmail.com':'Ham'
 };
 
 // ═══ SEED DATA ═══
@@ -14,6 +28,7 @@ const SEED_DATA = {"Ham":[{"id":"6923206a552af67f1e0fa518","name":"Leg Day 1","d
 
 // ═══ STATE ═══
 let currentUser = null;
+let currentAuth = null;
 let workouts = [];
 let templates = [];
 let customExercises = {strength:[],bodyweight:[],cardio:[]};
@@ -89,6 +104,11 @@ function loadUserData(){
     (customExercises[t]||[]).forEach(e=>{ if(typeof e==='object'&&e.name) registerCustomExInMaps(e); });
   });
   seedBassiTemplates();
+}
+
+function currentDisplayName(){
+  if(currentAuth&&currentAuth.name)return currentAuth.name;
+  return currentUser||'Account';
 }
 
 // ═══ EXERCISE LIBRARY ═══
@@ -312,9 +332,10 @@ function render(){
   // Hide timer bar on non-log screens
   const swBar=document.getElementById('sw-fixed-bar');
   if(swBar&&currentScreen!=='log'){swBar.style.display='none';swBar.innerHTML='';}
-  const meta=USERS_META[currentUser]||{};
   const logo=document.getElementById('logo-area');
-  if(logo)logo.innerHTML=`Lift<span style="color:var(--accent2)">Log</span> <span style="font-size:11px;font-weight:500;padding:2px 8px;border-radius:100px;background:${meta.bg};color:${meta.color};margin-left:4px;vertical-align:middle;cursor:pointer" onclick="switchUser()">${currentUser} ↩</span>`;
+  const accountLabel=esc(currentDisplayName().split(' ')[0]||'Account');
+  const accountInitials=esc(getInitials(currentDisplayName()));
+  if(logo)logo.innerHTML=`Lift<span style="color:var(--accent2)">Log</span> <button class="account-chip" onclick="openAccountModal()" title="Account"><span>${accountInitials}</span>${accountLabel}</button>`;
   if(currentScreen==='home')renderHome(main,topR);
   else if(currentScreen==='log')renderLog(main,topR);
   else if(currentScreen==='history')renderHistory(main,topR);
@@ -3978,4 +3999,155 @@ function switchUser(){
 // ════════════════════════════════════════════
 // BOOT
 // ════════════════════════════════════════════
-initUserPortal();
+initAuthPortal();
+
+function getInitials(name){
+  return (name||'U').trim().split(/\s+/).slice(0,2).map(p=>p[0]||'').join('').toUpperCase()||'U';
+}
+
+function decodeJwtPayload(token){
+  const payload=(token||'').split('.')[1];
+  if(!payload)return null;
+  try{
+    const normalized=payload.replace(/-/g,'+').replace(/_/g,'/');
+    const json=decodeURIComponent(Array.from(atob(normalized),c=>'%'+c.charCodeAt(0).toString(16).padStart(2,'0')).join(''));
+    return JSON.parse(json);
+  }catch{
+    return null;
+  }
+}
+
+function normalizedEmail(email){
+  return String(email||'').trim().toLowerCase();
+}
+
+function claimedLegacyProfile(email){
+  return LEGACY_PROFILE_CLAIMS[normalizedEmail(email)]||null;
+}
+
+function authUserKey(profile){
+  const claimed=claimedLegacyProfile(profile&&profile.email);
+  if(claimed)return claimed;
+  return 'google_'+String(profile.sub||profile.email||'').replace(/[^a-zA-Z0-9_-]/g,'_');
+}
+
+function setSignedIn(profile){
+  currentAuth={
+    sub:profile.sub,
+    email:profile.email||'',
+    name:profile.name||profile.given_name||profile.email||'Google User',
+    picture:profile.picture||''
+  };
+  currentUser=authUserKey(currentAuth);
+  DB.set('auth_session',currentAuth);
+  document.getElementById('user-portal').classList.add('hidden');
+  loadUserData();
+  currentScreen='home';
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active',b.dataset.screen==='home'));
+  render();
+  checkOnboarding(currentUser);
+}
+
+function handleGoogleCredential(response){
+  const profile=decodeJwtPayload(response&&response.credential);
+  if(!profile||!profile.sub){
+    showAuthMessage('Google sign-in did not return a usable profile. Please try again.');
+    return;
+  }
+  setSignedIn(profile);
+}
+
+function showAuthMessage(message){
+  const note=document.getElementById('auth-setup-note');
+  if(note)note.textContent=message||'';
+}
+
+function initGoogleAuth(){
+  const saved=DB.get('auth_session',null);
+  if(saved&&saved.sub){
+    setSignedIn(saved);
+    return;
+  }
+
+  const signin=document.getElementById('google-signin');
+  if(!signin)return;
+  const demoBtn=document.querySelector('.auth-demo-btn');
+  if(demoBtn)demoBtn.style.display='none';
+  if(!GOOGLE_CLIENT_ID){
+    if(demoBtn)demoBtn.style.display='inline-flex';
+    showAuthMessage('Add your Google OAuth Web client ID to GOOGLE_CLIENT_ID in app.js to enable Google sign-in.');
+    return;
+  }
+  if(!window.google||!google.accounts||!google.accounts.id){
+    showAuthMessage('Google sign-in is still loading. Refresh if this message stays here.');
+    return;
+  }
+
+  google.accounts.id.initialize({
+    client_id:GOOGLE_CLIENT_ID,
+    callback:handleGoogleCredential,
+    auto_select:true,
+    cancel_on_tap_outside:false
+  });
+  google.accounts.id.renderButton(signin,{
+    theme:'filled_black',
+    size:'large',
+    type:'standard',
+    shape:'pill',
+    text:'signup_with',
+    width:280
+  });
+  google.accounts.id.prompt();
+}
+
+function initAuthPortal(){
+  initGoogleAuth();
+}
+
+function continueAsLocalDemo(){
+  setSignedIn({sub:'local_demo',email:'',name:'Local Demo'});
+}
+
+function openAccountModal(){
+  const ml=document.getElementById('modal-layer');
+  const name=esc(currentDisplayName());
+  const email=esc(currentAuth&&currentAuth.email||'Local device session');
+  const profileName=claimedLegacyProfile(currentAuth&&currentAuth.email)||currentUser;
+  ml.innerHTML=`
+  <div class="modal-bg open" id="account-modal" onclick="if(event.target===this)closeModalBg(this)">
+    <div class="modal">
+      <div class="modal-handle"></div>
+      <div class="modal-title">Account</div>
+      <div class="account-modal-head">
+        <div class="account-modal-avatar">${esc(getInitials(currentDisplayName()))}</div>
+        <div>
+          <div class="account-modal-name">${name}</div>
+          <div class="account-modal-email">${email}</div>
+          <div class="account-modal-profile">Profile: ${esc(profileName)}</div>
+        </div>
+      </div>
+      <div class="auth-privacy-note">Your workouts are saved under this account on this device. Logging out keeps the saved data here, but hides it until this account signs in again.</div>
+      <div class="flex gap-8">
+        <button class="btn flex-1" onclick="closeModalAnim('account-modal')">Close</button>
+        <button class="btn btn-danger flex-1" onclick="signOut()">Log out</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function signOut(){
+  activeWorkout=null;editingWorkout=null;
+  clearInterval(timerInterval);timerInterval=null;swReset();
+  if(window.google&&google.accounts&&google.accounts.id)google.accounts.id.disableAutoSelect();
+  DB.del('auth_session');
+  currentAuth=null;
+  currentUser=null;
+  workouts=[];templates=[];customExercises={strength:[],bodyweight:[],cardio:[]};
+  document.getElementById('modal-layer').innerHTML='';
+  document.getElementById('user-portal').classList.remove('hidden');
+  initGoogleAuth();
+}
+
+function switchUser(){
+  signOut();
+}

@@ -7,14 +7,17 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer onload="window.__googleAuthLoaded=true;if(window.initGoogleAuth)window.initGoogleAuth();"></script>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
 <div id="user-portal">
   <div class="portal-logo">Lift<span>Log</span></div>
-  <div class="portal-sub">Who's training today?</div>
-  <div class="user-grid" id="user-grid"></div>
+  <div class="portal-sub">Sign in to keep your training data under your own account on this device.</div>
+  <div id="google-signin"></div>
+  <button class="btn btn-ghost auth-demo-btn" onclick="continueAsLocalDemo()">Continue local demo</button>
+  <div class="auth-setup-note" id="auth-setup-note"></div>
 </div>
 
 <div id="onboarding" class="hidden">
