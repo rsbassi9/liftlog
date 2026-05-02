@@ -7,7 +7,7 @@ const DB = {
 
 // Set this to your Google OAuth 2.0 Web client ID from Google Cloud.
 // Example: const GOOGLE_CLIENT_ID = '1234567890-abc.apps.googleusercontent.com';
-const GOOGLE_CLIENT_ID = '';
+const GOOGLE_CLIENT_ID = '617578695179-ik30t6en9te1co8oddhm4sg3svq0ss8p.apps.googleusercontent.com';
 
 // Google accounts that should claim the original local profiles.
 // Add Harman's Google email here when you have it, for example:
