@@ -51,6 +51,8 @@ let openExBlockStats = new Set(); // ei indices with stats panel open in log
 let coachDebriefLoading = false;
 let splitAnswers = {};
 let splitStep = 0;
+let splitDraft = null;
+let splitOriginalDraft = null;
 let calSelectedKey = null;
 let historySearch = '';
 let historyFilter = 'All';
@@ -347,7 +349,61 @@ function render(){
 // SPLIT
 // ════════════════════════════════════════════
 function getSplit(){
-  return DB.get('split_'+currentUser,null);
+  const split=DB.get('split_'+currentUser,null);
+  if(split&&!split.id){
+    split.id=newSplitId();
+    DB.set('split_'+currentUser,split);
+  }
+  return split;
+}
+function getSplitLibrary(){
+  return DB.get('split_library_'+currentUser,[]);
+}
+function saveSplitLibrary(items){
+  DB.set('split_library_'+currentUser,items);
+}
+function newSplitId(){
+  return 'split_'+Date.now()+'_'+Math.random().toString(36).slice(2,7);
+}
+function defaultSplitDraft(){
+  return {
+    id:newSplitId(),
+    name:'My Split',
+    sessions:[
+      {name:'Push',exercises:[]},
+      {name:'Pull',exercises:[]},
+      {name:'Legs',exercises:[]}
+    ]
+  };
+}
+function splitToDraft(split){
+  if(!split)return defaultSplitDraft();
+  const library=getSplitLibrary();
+  const saved=library.find(s=>s.id&&split.id&&s.id===split.id)||
+    library.find(s=>s.name===split.name&&Array.isArray(s.sessions));
+  if(saved&&saved.sessions&&typeof saved.sessions[0]==='object'){
+    return JSON.parse(JSON.stringify(saved));
+  }
+  return {
+    id:split.id||newSplitId(),
+    name:split.name||'My Split',
+    sessions:(split.sessions||[]).map(name=>{
+      const t=templates.find(t=>t.name===name);
+      return {
+        name,
+        exercises:t?(t.exercises||[]).map(e=>({
+          name:e.name||'',
+          type:e.type||'strength',
+          sets:Math.max(1,(e.sets||[]).length||3)
+        })):[]
+      };
+    })
+  };
+}
+function splitDraftSummary(draft){
+  const dayCount=(draft.sessions||[]).length;
+  const exCount=(draft.sessions||[]).reduce((sum,s)=>sum+(s.exercises||[]).length,0);
+  return `${dayCount} day${dayCount!==1?'s':''} - ${exCount} exercise${exCount!==1?'s':''}`;
 }
 function getNextSplitSession(){
   const split=getSplit();
@@ -390,7 +446,18 @@ function chooseSplitDay(dayIdx){
 }
 function renderSplitCard(){
   const next=getNextSplitSession();
-  if(!next)return'';
+  if(!next){
+    return`<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:14px 16px;margin-bottom:16px">
+      <div style="font-size:10px;font-weight:600;color:var(--text3);letter-spacing:.8px;text-transform:uppercase;margin-bottom:6px">Split</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px">
+        <div>
+          <div style="font-size:17px;font-weight:700;letter-spacing:-.2px">Create your split</div>
+          <div style="font-size:12px;color:var(--text2);margin-top:3px">Build reusable training days and track what comes next.</div>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="openSplitEditor()" style="white-space:nowrap">Create</button>
+      </div>
+    </div>`;
+  }
   const short={'Legs (Quads)':'Quads','Upper':'Upper','Shoulders + Arms':'S+A','Legs (Hamstrings)':'Hams','Push':'Push','Pull':'Pull'};
   const chips=next.sessions.map((s,i)=>{
     const active=i===next.dayIndex;
@@ -400,7 +467,10 @@ function renderSplitCard(){
   return`<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:14px 16px;margin-bottom:16px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
       <div style="font-size:10px;font-weight:600;color:var(--text3);letter-spacing:.8px;text-transform:uppercase">${esc(next.splitName)}</div>
-      <div style="font-size:11px;color:var(--text3)">Day ${next.dayIndex+1} of ${next.total}</div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <button class="split-edit-link" onclick="openSplitEditor()">Edit</button>
+        <div style="font-size:11px;color:var(--text3)">Day ${next.dayIndex+1} of ${next.total}</div>
+      </div>
     </div>
     <div style="display:flex;gap:4px;margin-bottom:12px">${chips}</div>
     <div style="display:flex;justify-content:space-between;align-items:center">
@@ -411,6 +481,172 @@ function renderSplitCard(){
       <button class="btn btn-primary btn-sm" onclick="startSplitSession()" style="white-space:nowrap">Start →</button>
     </div>
   </div>`;
+}
+
+function openSplitEditor(splitId){
+  const current=getSplit();
+  if(splitId){
+    const saved=getSplitLibrary().find(s=>s.id===splitId);
+    splitDraft=saved?JSON.parse(JSON.stringify(saved)):defaultSplitDraft();
+  } else {
+    splitDraft=splitToDraft(current);
+  }
+  splitOriginalDraft=JSON.parse(JSON.stringify(splitDraft));
+  renderSplitEditor();
+}
+
+function renderSplitEditor(){
+  const ml=document.getElementById('modal-layer');
+  if(!splitDraft)splitDraft=defaultSplitDraft();
+  const library=getSplitLibrary();
+  const current=getSplit();
+  const savedSplits=library.filter(s=>s.id!==splitDraft.id);
+  ml.innerHTML=`
+  <div class="modal-bg open" id="split-editor-modal" onclick="if(event.target===this)closeModalBg(this)">
+    <div class="modal">
+      <div class="modal-handle"></div>
+      <div class="flex-between mb-12">
+        <div class="modal-title" style="margin-bottom:0">Split builder</div>
+        ${current?`<button class="btn btn-sm" onclick="openSplitEditor('${current.id||''}')">Reset</button>`:''}
+      </div>
+      <div class="input-group mb-12">
+        <label>Split name</label>
+        <input value="${esc(splitDraft.name)}" oninput="splitDraft.name=this.value">
+      </div>
+      ${savedSplits.length?`
+        <div class="split-library">
+          <div class="split-builder-label">Saved splits</div>
+          ${savedSplits.map(s=>`
+            <button class="split-library-row" onclick="openSplitEditor('${s.id}')">
+              <span>${esc(s.name)}</span>
+              <small>${esc(splitDraftSummary(s))}</small>
+            </button>`).join('')}
+        </div>`:''}
+      <div class="split-builder-days">
+        ${(splitDraft.sessions||[]).map((day,di)=>renderSplitEditorDay(day,di)).join('')}
+      </div>
+      <button class="btn w-full mb-12" onclick="addSplitDay()">Add day</button>
+      <div class="flex gap-8">
+        <button class="btn flex-1" onclick="closeModalAnim('split-editor-modal')">Cancel</button>
+        ${(current&&splitDraft.id===current.id)?`<button class="btn flex-1" onclick="saveSplitDraft(false)">Save</button>`:''}
+        <button class="btn btn-primary flex-1" onclick="saveSplitDraft(true)">${current?'Save as new':'Save split'}</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderSplitEditorDay(day,di){
+  return`
+    <div class="split-builder-day">
+      <div class="split-builder-day-head">
+        <div class="input-group" style="margin-bottom:0">
+          <label>Day ${di+1}</label>
+          <input value="${esc(day.name)}" oninput="updateSplitDayName(${di},this.value)">
+        </div>
+        <button class="btn btn-sm btn-ghost" onclick="removeSplitDay(${di})">Remove</button>
+      </div>
+      <div class="split-builder-exercises">
+        ${(day.exercises||[]).map((ex,ei)=>renderSplitEditorExercise(ex,di,ei)).join('')}
+      </div>
+      <button class="btn btn-sm w-full" onclick="addSplitExercise(${di})">Add exercise</button>
+    </div>`;
+}
+
+function renderSplitEditorExercise(ex,di,ei){
+  return`
+    <div class="split-builder-ex">
+      <input class="split-builder-ex-name" placeholder="Exercise" value="${esc(ex.name)}" oninput="updateSplitExercise(${di},${ei},'name',this.value)">
+      <select onchange="updateSplitExercise(${di},${ei},'type',this.value)">
+        ${['strength','bodyweight','cardio'].map(t=>`<option value="${t}" ${ex.type===t?'selected':''}>${t}</option>`).join('')}
+      </select>
+      <input type="number" min="1" max="12" value="${esc(ex.sets||3)}" onchange="updateSplitExercise(${di},${ei},'sets',this.value)">
+      <button class="split-builder-icon-btn" onclick="removeSplitExercise(${di},${ei})" title="Remove exercise">x</button>
+    </div>`;
+}
+
+function updateSplitDayName(di,value){
+  if(splitDraft&&splitDraft.sessions[di])splitDraft.sessions[di].name=value;
+}
+function addSplitDay(){
+  if(!splitDraft)splitDraft=defaultSplitDraft();
+  splitDraft.sessions.push({name:`Day ${splitDraft.sessions.length+1}`,exercises:[]});
+  renderSplitEditor();
+}
+function removeSplitDay(di){
+  if(!splitDraft)return;
+  splitDraft.sessions.splice(di,1);
+  if(!splitDraft.sessions.length)splitDraft.sessions.push({name:'Day 1',exercises:[]});
+  renderSplitEditor();
+}
+function addSplitExercise(di){
+  const day=splitDraft&&splitDraft.sessions[di];
+  if(!day)return;
+  if(!day.exercises)day.exercises=[];
+  day.exercises.push({name:'',type:'strength',sets:3});
+  renderSplitEditor();
+}
+function updateSplitExercise(di,ei,key,value){
+  const ex=splitDraft&&splitDraft.sessions[di]&&splitDraft.sessions[di].exercises[ei];
+  if(!ex)return;
+  ex[key]=key==='sets'?Math.max(1,parseInt(value,10)||1):value;
+}
+function removeSplitExercise(di,ei){
+  const day=splitDraft&&splitDraft.sessions[di];
+  if(!day)return;
+  day.exercises.splice(ei,1);
+  renderSplitEditor();
+}
+function cleanSplitDraft(saveAsNew){
+  const base=JSON.parse(JSON.stringify(splitDraft||defaultSplitDraft()));
+  base.id=saveAsNew?newSplitId():(base.id||newSplitId());
+  base.name=(base.name||'My Split').trim()||'My Split';
+  const seen={};
+  base.sessions=(base.sessions||[]).map((day,idx)=>({
+    name:(day.name||`Day ${idx+1}`).trim()||`Day ${idx+1}`,
+    exercises:(day.exercises||[]).map(ex=>({
+      name:(ex.name||'').trim(),
+      type:ex.type||'strength',
+      sets:Math.max(1,parseInt(ex.sets,10)||3)
+    })).filter(ex=>ex.name)
+  })).filter(day=>day.name).map(day=>{
+    const original=day.name;
+    seen[original]=(seen[original]||0)+1;
+    if(seen[original]>1)day.name=`${original} ${seen[original]}`;
+    return day;
+  });
+  if(!base.sessions.length)base.sessions=[{name:'Day 1',exercises:[]}];
+  return base;
+}
+function saveSplitDraft(saveAsNew){
+  const draft=cleanSplitDraft(saveAsNew);
+  draft.sessions.forEach(day=>{
+    const template={
+      name:day.name,
+      exercises:(day.exercises||[]).map((ex,idx)=>({
+        id:Date.now()+idx+Math.floor(Math.random()*1000),
+        name:ex.name,
+        type:ex.type,
+        sets:Array.from({length:ex.sets},()=>({}))
+      }))
+    };
+    const ti=templates.findIndex(t=>t.name===day.name);
+    if(ti>=0)templates[ti]=template;
+    else templates.push(template);
+  });
+  DB.set('split_'+currentUser,{id:draft.id,name:draft.name,sessions:draft.sessions.map(s=>s.name)});
+  const library=getSplitLibrary();
+  if(saveAsNew&&getSplit()&&splitOriginalDraft&&splitOriginalDraft.id&&!library.some(s=>s.id===splitOriginalDraft.id)){
+    library.push(splitOriginalDraft);
+  }
+  const li=library.findIndex(s=>s.id===draft.id);
+  if(li>=0)library[li]=draft;
+  else library.push(draft);
+  saveSplitLibrary(library);
+  save();
+  splitDraft=null;
+  splitOriginalDraft=null;
+  closeModalAnim('split-editor-modal');
+  render();
 }
 
 // HOME SCREEN

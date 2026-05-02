@@ -431,6 +431,19 @@ select option { background:var(--bg3); }
   transition:all .15s; font-family:var(--sans); color:var(--text); }
 .split-option:hover { border-color:var(--accent); background:var(--accent-bg); }
 .split-option.selected { border-color:var(--accent); background:var(--accent-bg); color:var(--accent2); font-weight:600; }
+.split-edit-link { background:none; border:none; color:var(--accent2); font-size:11px; font-weight:600; padding:2px 0; cursor:pointer; }
+.split-library { background:var(--bg3); border:1px solid var(--border); border-radius:var(--r2); padding:10px; margin-bottom:12px; }
+.split-library-row { width:100%; display:flex; justify-content:space-between; align-items:center; gap:10px; background:var(--bg2); border:1px solid var(--border); color:var(--text); border-radius:var(--r); padding:9px 10px; margin-top:6px; text-align:left; cursor:pointer; }
+.split-library-row span { font-weight:600; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.split-library-row small { color:var(--text3); font-size:10px; white-space:nowrap; }
+.split-builder-label { font-size:10px; font-weight:600; color:var(--text3); letter-spacing:.7px; text-transform:uppercase; }
+.split-builder-day { background:var(--bg3); border:1px solid var(--border); border-radius:var(--r2); padding:12px; margin-bottom:10px; }
+.split-builder-day-head { display:flex; align-items:flex-end; gap:8px; margin-bottom:10px; }
+.split-builder-day-head .input-group { min-width:0; }
+.split-builder-exercises { display:flex; flex-direction:column; gap:6px; margin-bottom:8px; }
+.split-builder-ex { display:grid; grid-template-columns:minmax(0,1fr) 92px 54px 30px; gap:6px; align-items:center; }
+.split-builder-ex input, .split-builder-ex select { min-width:0; font-size:14px; padding:7px 8px; }
+.split-builder-icon-btn { height:34px; border-radius:var(--r); border:1px solid var(--border); background:var(--bg4); color:var(--text3); cursor:pointer; font-weight:700; }
 .split-plan-week { background:var(--bg3); border:1px solid var(--border); border-radius:var(--r2);
   margin-bottom:8px; overflow:hidden; }
 .split-plan-week-header { padding:10px 14px; display:flex; justify-content:space-between;
