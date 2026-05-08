@@ -114,6 +114,8 @@ select option { background:var(--bg3); }
 .set-check svg { width:13px; height:13px; }
 .set-del { width:28px; height:28px; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--text3); border-radius:6px; border:none; background:none; transition:color .15s; flex-shrink:0; }
 .set-del:hover { color:var(--red); }
+.swipe-del-hint { position:absolute; right:6px; top:50%; transform:translateY(-50%); color:var(--red,#e53e3e); opacity:0; pointer-events:none; display:flex; align-items:center; justify-content:center; }
+.set-row { overflow:hidden; }
 .col-labels { display:grid; gap:5px; font-size:10px; color:var(--text3); letter-spacing:.4px; font-family:var(--sans); margin-bottom:4px; }
 .col-labels.strength  { grid-template-columns:20px 1fr 1fr 44px 28px; }
 .col-labels.bodyweight{ grid-template-columns:20px 1fr 1fr 44px 28px; }
