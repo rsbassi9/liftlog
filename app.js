@@ -914,6 +914,7 @@ function renderLog(el,topR){
     const mini=document.getElementById('sw-display-mini');
     if(mini)mini.textContent=swFmt(swMs);
     initDragSort();
+    initSetSwipeDelete();
   }
 }
 
@@ -2113,10 +2114,12 @@ function addSet(ei){
   renderLog(document.getElementById('main'),document.getElementById('topbar-right'));
 }
 function removeSet(ei,si){
-  const wo=editingWorkout?editingWorkout.workout:activeWorkout;
-  if(!wo)return;
-  wo.exercises[ei].sets.splice(si,1);
-  renderLog(document.getElementById('main'),document.getElementById('topbar-right'));
+  showConfirm('Remove this set?',null,'Remove','btn-danger',()=>{
+    const wo=editingWorkout?editingWorkout.workout:activeWorkout;
+    if(!wo)return;
+    wo.exercises[ei].sets.splice(si,1);
+    renderLog(document.getElementById('main'),document.getElementById('topbar-right'));
+  });
 }
 function updateSet(ei,si,field,val){
   const wo=editingWorkout?editingWorkout.workout:activeWorkout;
@@ -2392,8 +2395,11 @@ function toggleDropset(ei,si){
 function removeExercise(ei){
   const wo=editingWorkout?editingWorkout.workout:activeWorkout;
   if(!wo)return;
-  wo.exercises.splice(ei,1);
-  renderLog(document.getElementById('main'),document.getElementById('topbar-right'));
+  const name=wo.exercises[ei]?.name||'this exercise';
+  showConfirm(`Remove ${esc(name)}?`,'All sets for this exercise will be deleted.','Remove','btn-danger',()=>{
+    wo.exercises.splice(ei,1);
+    renderLog(document.getElementById('main'),document.getElementById('topbar-right'));
+  });
 }
 function addSuperset(ei){
   const wo=editingWorkout?editingWorkout.workout:activeWorkout;
@@ -4067,6 +4073,72 @@ function initDragSort(){
   main._dlEnd=()=>{clearTimeout(_liftTimer);_preLift=null;};
   main.addEventListener('touchmove',main._dlMove,{passive:true});
   main.addEventListener('touchend',main._dlEnd,{passive:true});
+}
+
+function initSetSwipeDelete(){
+  const wo=editingWorkout?editingWorkout.workout:activeWorkout;
+  if(!wo)return;
+  wo.exercises.forEach((ex,ei)=>{
+    ex.sets.forEach((_,si)=>{
+      const row=document.getElementById(`setrow-${ei}-${si}`);
+      if(!row)return;
+      let hint=row.querySelector('.swipe-del-hint');
+      if(!hint){
+        hint=document.createElement('div');
+        hint.className='swipe-del-hint';
+        hint.innerHTML='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>';
+        row.appendChild(hint);
+      }
+      let startX,startY,lastDx=0,active=false;
+      const onStart=e=>{
+        const t=e.touches[0];
+        startX=t.clientX;startY=t.clientY;lastDx=0;active=false;
+        row.style.transition='';
+      };
+      const onMove=e=>{
+        const t=e.touches[0];
+        const dx=t.clientX-startX;
+        const dy=t.clientY-startY;
+        if(!active&&(Math.abs(dy)>Math.abs(dx)||Math.abs(dx)<8))return;
+        if(dx>=0){
+          if(active){row.style.transform='translateX(0)';row.style.background='';hint.style.opacity='0';}
+          return;
+        }
+        active=true;
+        lastDx=dx;
+        const clamped=Math.max(dx,-100);
+        row.style.transform=`translateX(${clamped}px)`;
+        const progress=Math.min(Math.abs(clamped)/80,1);
+        hint.style.opacity=String(progress);
+        row.style.background=Math.abs(clamped)>70?'rgba(220,50,50,0.12)':'';
+        e.preventDefault();
+      };
+      const onEnd=()=>{
+        if(!active)return;
+        const triggered=lastDx<-70;
+        row.style.transition='transform 0.2s,background 0.2s';
+        row.style.transform='translateX(0)';
+        row.style.background='';
+        hint.style.opacity='0';
+        active=false;lastDx=0;
+        if(triggered){
+          showConfirm('Remove this set?',null,'Remove','btn-danger',()=>{
+            const wo2=editingWorkout?editingWorkout.workout:activeWorkout;
+            if(!wo2)return;
+            wo2.exercises[ei].sets.splice(si,1);
+            renderLog(document.getElementById('main'),document.getElementById('topbar-right'));
+          });
+        }
+      };
+      row.removeEventListener('touchstart',row._swipeStart);
+      row.removeEventListener('touchmove',row._swipeMove);
+      row.removeEventListener('touchend',row._swipeEnd);
+      row._swipeStart=onStart;row._swipeMove=onMove;row._swipeEnd=onEnd;
+      row.addEventListener('touchstart',onStart,{passive:true});
+      row.addEventListener('touchmove',onMove,{passive:false});
+      row.addEventListener('touchend',onEnd,{passive:true});
+    });
+  });
 }
 
 function liftBlock(ei,touch){
