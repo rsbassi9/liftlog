@@ -990,9 +990,12 @@ function formatSetForLastSummary(s){
 function formatLastSessionSummary(session){
   const sets=(session&&session.sets||[]).map(formatSetForLastSummary).filter(Boolean);
   const notes=session&&session.notes?cleanSetNote(session.notes):'';
-  if(!sets.length&&!notes) return '';
+  const linked=session&&session.superset&&session.superset.partners&&session.superset.partners.length
+    ? `${session.superset.label} with ${session.superset.partners.map(esc).join(' + ')}`
+    : '';
+  if(!sets.length&&!notes&&!linked) return '';
   const setText=sets.length?`<strong>${sets.map((txt,i)=>`${i+1}) ${txt}`).join(' · ')}</strong>`:'';
-  return `Last session: ${setText}${notes?` <span style="color:var(--text3)">Notes: ${esc(notes)}</span>`:''}`;
+  return `Last session: ${setText}${linked?` <span style="color:var(--accent2)">Linked: ${linked}</span>`:''}${notes?` <span style="color:var(--text3)">Notes: ${esc(notes)}</span>`:''}`;
 }
 
 function getGhostSetForExercise(name,si){
@@ -1002,12 +1005,53 @@ function getGhostSetForExercise(name,si){
   return sets[si]||null;
 }
 
+function supersetLetter(n){
+  let label='';
+  n++;
+  while(n>0){
+    n--;
+    label=String.fromCharCode(65+(n%26))+label;
+    n=Math.floor(n/26);
+  }
+  return label;
+}
+
+function getSupersetInfo(wo, supersetId, currentIndex){
+  const ids=[];
+  (wo&&wo.exercises||[]).forEach(ex=>{
+    if(ex.supersetId&&!ids.includes(ex.supersetId))ids.push(ex.supersetId);
+  });
+  const index=Math.max(0,ids.indexOf(supersetId));
+  const members=(wo&&wo.exercises||[])
+    .map((ex,i)=>({...ex,_index:i}))
+    .filter(ex=>ex.supersetId===supersetId);
+  const partners=members.filter(ex=>ex._index!==currentIndex).map(ex=>ex.name);
+  return {
+    label:`Superset ${supersetLetter(index)}`,
+    members,
+    partners
+  };
+}
+
+function getSupersetSummary(wo, supersetId){
+  const info=getSupersetInfo(wo,supersetId,-1);
+  return `${info.label}${info.members.length?` · ${info.members.map(ex=>esc(ex.name)).join(' + ')}`:''}`;
+}
+
 function renderExerciseBlock(ex,ei,isEditing){
   const pr=getExercisePR(ex.name);
   const isSS=ex.supersetId;
+  const wo=editingWorkout?editingWorkout.workout:activeWorkout;
+  const ssInfo=isSS?getSupersetInfo(wo,isSS,ei):null;
   let html=`<div class="exercise-block${isSS?' superset-group':''}" id="exblock-${ei}">`;
   if(isSS){
-    html+=`<div class="ss-indicator"><div class="ss-line"></div><div class="ss-label">Superset</div></div>`;
+    html+=`<div class="ss-indicator">
+      <div class="ss-line"></div>
+      <div>
+        <div class="ss-label">${ssInfo.label}</div>
+        <div class="ss-members">${ssInfo.partners.length?`with ${ssInfo.partners.map(esc).join(' + ')}`:'No linked exercise yet'}</div>
+      </div>
+    </div>`;
   }
   // Last session data for this exercise
   const exHist=getExerciseHistory(ex.name);
@@ -1032,9 +1076,8 @@ function renderExerciseBlock(ex,ei,isEditing){
       <div class="ex-name-row">
         <span class="ex-name-text">${esc(ex.name)}</span>
         <span class="tag tag-${ex.type}" style="font-size:10px;flex-shrink:0">${ex.type}</span>
-        ${ex.supersetId?`<span class="superset-badge">SS</span>`:''}
+        ${ex.supersetId?`<span class="superset-badge">${ssInfo.label.replace('Superset ','SS ')}</span>`:''}
       </div>
-      ${lastTimeStr?`<div class="ex-subtitle">${lastTimeStr}</div>`:''}
     </div>
     <div style="display:flex;gap:6px;align-items:flex-start;flex-shrink:0">
       <button class="ex-info-btn${exBlockStatsOpen?' active':''}" onclick="toggleExBlockStats(${ei})" title="Exercise stats">ⓘ</button>
@@ -1065,7 +1108,7 @@ function renderExerciseBlock(ex,ei,isEditing){
 
   html+=`<div class="flex gap-8 mt-8">
     <button class="btn btn-sm flex-1" onclick="addSet(${ei})">+ Set</button>
-    ${ex.type!=='cardio'?`<button class="btn btn-sm" onclick="addSuperset(${ei})" title="Add superset">⇌ Superset</button>`:''}
+    ${ex.type!=='cardio'?`<button class="btn btn-sm" onclick="addSuperset(${ei})" title="${ex.supersetId?'Unlink superset':'Link with adjacent exercise'}">${ex.supersetId?'Unlink':'⇌ Superset'}</button>`:''}
   </div></div>`;
   return html;
 }
@@ -1256,7 +1299,7 @@ function renderWorkoutDetail(w,idx){
       // Collect all exercises in this superset
       const members=w.exercises.map((e,j)=>({e,j})).filter(({e,j})=>e.supersetId===ex.supersetId&&!seen.has(j));
       members.forEach(({j})=>seen.add(j));
-      groups.push({type:'superset',exercises:members.map(({e})=>e)});
+      groups.push({type:'superset',supersetId:ex.supersetId,exercises:members.map(({e})=>e)});
     } else {
       seen.add(i);
       groups.push({type:'single',exercise:ex});
@@ -1267,7 +1310,7 @@ function renderWorkoutDetail(w,idx){
   groups.forEach(group=>{
     if(group.type==='superset'){
       html+=`<div class="hd-superset-group">
-        <div class="hd-superset-label">⇌ Superset</div>
+        <div class="hd-superset-label">⇌ ${getSupersetSummary(w,group.supersetId)}</div>
         ${group.exercises.map(ex=>renderHdExercise(ex)).join('')}
       </div>`;
     } else {
@@ -2465,8 +2508,24 @@ function removeExercise(ei){
 function addSuperset(ei){
   const wo=editingWorkout?editingWorkout.workout:activeWorkout;
   if(!wo)return;
-  const ssId='ss_'+Date.now();
-  wo.exercises[ei].supersetId=ssId;
+  const ex=wo.exercises[ei];
+  if(!ex)return;
+  if(ex.supersetId){
+    const oldId=ex.supersetId;
+    delete ex.supersetId;
+    const remaining=wo.exercises.filter(e=>e.supersetId===oldId);
+    if(remaining.length===1)delete remaining[0].supersetId;
+    renderLog(document.getElementById('main'),document.getElementById('topbar-right'));
+    return;
+  }
+
+  const neighborIndex=ei<wo.exercises.length-1?ei+1:(ei>0?ei-1:-1);
+  if(neighborIndex<0)return;
+  const neighbor=wo.exercises[neighborIndex];
+  if(!neighbor)return;
+  const ssId=neighbor.supersetId||('ss_'+Date.now());
+  ex.supersetId=ssId;
+  neighbor.supersetId=ssId;
   renderLog(document.getElementById('main'),document.getElementById('topbar-right'));
 }
 
@@ -3179,8 +3238,15 @@ function getAllPRs(){
 }
 function getExerciseHistory(name){
   return workouts.filter(w=>w.exercises.some(e=>e.name===name)).map(w=>{
-    const ex=w.exercises.find(e=>e.name===name);
-    return {date:w.date,sets:ex.sets,notes:ex.notes};
+    const idx=w.exercises.findIndex(e=>e.name===name);
+    const ex=w.exercises[idx];
+    const ssInfo=ex.supersetId?getSupersetInfo(w,ex.supersetId,idx):null;
+    return {
+      date:w.date,
+      sets:ex.sets,
+      notes:ex.notes,
+      superset:ssInfo?{label:ssInfo.label,partners:ssInfo.partners}:null
+    };
   });
 }
 function getExercisesWithHistory(){
