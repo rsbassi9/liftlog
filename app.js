@@ -969,6 +969,39 @@ function getWeightSuggestions(wo){
   return sug.slice(0,2);
 }
 
+function cleanSetNote(notes){
+  return (notes||'').replace(/\[SUPERSET:[^\]]+\]/g,'').replace(/\[DROPSET\]/g,'').trim();
+}
+
+function formatSetForLastSummary(s){
+  if(!s) return '';
+  const reps=s.reps?`${s.reps}`:'';
+  const weight=s.weight&&parseFloat(s.weight)>0?`${fmtW(s.weight)} ${wUnit()}`:'';
+  let main='';
+  if(reps&&weight) main=`${weight} x ${reps}`;
+  else if(reps) main=`${reps} reps`;
+  else if(weight) main=weight;
+  if(!main) return '';
+  const rpe=s.rpe?` @ ${s.rpe.replace('max_effort','max').replace('challenging','hard')}`:'';
+  const note=cleanSetNote(s.notes);
+  return `${main}${rpe}${note?` (${esc(note)})`:''}`;
+}
+
+function formatLastSessionSummary(session){
+  const sets=(session&&session.sets||[]).map(formatSetForLastSummary).filter(Boolean);
+  const notes=session&&session.notes?cleanSetNote(session.notes):'';
+  if(!sets.length&&!notes) return '';
+  const setText=sets.length?`<strong>${sets.map((txt,i)=>`${i+1}) ${txt}`).join(' · ')}</strong>`:'';
+  return `Last session: ${setText}${notes?` <span style="color:var(--text3)">Notes: ${esc(notes)}</span>`:''}`;
+}
+
+function getGhostSetForExercise(name,si){
+  const hist=getExerciseHistory(name);
+  if(!hist.length) return null;
+  const sets=(hist[hist.length-1].sets||[]).filter(s=>s.reps||s.weight);
+  return sets[si]||null;
+}
+
 function renderExerciseBlock(ex,ei,isEditing){
   const pr=getExercisePR(ex.name);
   const isSS=ex.supersetId;
@@ -992,6 +1025,7 @@ function renderExerciseBlock(ex,ei,isEditing){
       lastTimeStr=`Last: <strong>${r} reps</strong>`;
     }
   }
+  if(lastSession) lastTimeStr=formatLastSessionSummary(lastSession);
   const exBlockStatsOpen=openExBlockStats.has(ei);
   html+=`<div class="ex-header">
     <div style="flex:1;min-width:0">
@@ -1040,26 +1074,32 @@ function renderSetRow(ex,ei,si,s){
   const done=s.done?'completed':'';
   const type=ex.type;
   const isDropset=s.notes&&s.notes.includes('[DROPSET]');
-  const userNote=s.notes?s.notes.replace(/\[SUPERSET:[^\]]+\]/g,'').replace(/\[DROPSET\]/g,'').trim():'';
+  const userNote=s._ghost?'':(s.notes?s.notes.replace(/\[SUPERSET:[^\]]+\]/g,'').replace(/\[DROPSET\]/g,'').trim():'');
   const hasNote=!!userNote;
   const noteId=`setnote-${ei}-${si}`;
-  const rpeClass='rpe-'+(s.rpe||'none');
+  const rpeClass='rpe-'+(s._ghost?'none':(s.rpe||'none'));
 
   let weightInput,distInput,durInput;
-  const wv=s.weight?fmtW(s.weight):'';
+  const ghostSet=s._ghost?getGhostSetForExercise(ex.name,si):null;
+  const displayWeight=s._ghost?(s._ghostWeight!==undefined?s._ghostWeight:(ghostSet&&ghostSet.weight)):s.weight;
+  const displayReps=s._ghost?(s._ghostReps!==undefined?s._ghostReps:(ghostSet&&ghostSet.reps)):s.reps;
+  const wv=!s._ghost&&s.weight?fmtW(s.weight):'';
+  const weightPh=displayWeight?fmtW(displayWeight):'—';
+  const repsValue=!s._ghost&&s.reps?s.reps:'';
+  const repsPh=displayReps||'—';
 
   if(type==='cardio'){
     distInput=`<input type="number" class="set-input" min="0" step="0.1" placeholder="—" value="${s.dist||''}" oninput="updateSet(${ei},${si},'dist',this.value)">`;
     durInput=`<input type="number" class="set-input" min="0" step="0.5" placeholder="—" value="${s.duration||''}" oninput="updateSet(${ei},${si},'duration',this.value)">`;
   } else {
-    weightInput=`<input type="number" class="set-input" min="0" step="0.5" placeholder="—" value="${wv}"
+    weightInput=`<input type="number" class="set-input" min="0" step="0.5" placeholder="${weightPh}" value="${wv}"
       id="wi-${ei}-${si}"
       style="${s._ghost?'color:var(--text3)':''}"
       oninput="updateSet(${ei},${si},'weight_disp',this.value);checkLivePR(${ei},${si})"
       onfocus="clearGhostInput(${ei},${si},this);checkLivePR(${ei},${si})">`;
   }
 
-  const repsInput=`<input type="number" class="set-input" min="0" placeholder="—" value="${s.reps||''}"
+  const repsInput=`<input type="number" class="set-input" min="0" placeholder="${repsPh}" value="${repsValue}"
     id="ri-${ei}-${si}"
     style="${s._ghost?'color:var(--text3)':''}"
     oninput="updateSet(${ei},${si},'reps',this.value);checkLivePR(${ei},${si})"
@@ -1070,10 +1110,10 @@ function renderSetRow(ex,ei,si,s){
   const rpeSelect=`<select id="rpesel-${ei}-${si}" class="rpe-select ${rpeClass}"
     onchange="setRPE(${ei},${si},this.value)">
     <option value="">—</option>
-    <option value="easy"${s.rpe==='easy'?' selected':''}>Easy</option>
-    <option value="moderate"${s.rpe==='moderate'?' selected':''}>Mod</option>
-    <option value="challenging"${s.rpe==='challenging'?' selected':''}>Hard</option>
-    <option value="max_effort"${s.rpe==='max_effort'?' selected':''}>Max</option>
+    <option value="easy"${!s._ghost&&s.rpe==='easy'?' selected':''}>Easy</option>
+    <option value="moderate"${!s._ghost&&s.rpe==='moderate'?' selected':''}>Mod</option>
+    <option value="challenging"${!s._ghost&&s.rpe==='challenging'?' selected':''}>Hard</option>
+    <option value="max_effort"${!s._ghost&&s.rpe==='max_effort'?' selected':''}>Max</option>
   </select>`;
 
   const noteBtn=`<button class="set-note-btn${hasNote?' has-note':''}" id="notebtn-${ei}-${si}"
@@ -2126,6 +2166,11 @@ function updateSet(ei,si,field,val){
   if(!wo)return;
   const s=wo.exercises[ei].sets[si];
   if(!s)return;
+  if(s._ghost){
+    s._ghost=false;
+    delete s._ghostWeight;
+    delete s._ghostReps;
+  }
   if(field==='weight_disp'){
     s.weight=val===''?undefined:toKg(val);
   } else {
@@ -2197,8 +2242,17 @@ function clearGhostInput(ei,si,el){
   const s=wo.exercises[ei].sets[si];
   if(s&&s._ghost){
     s._ghost=false;
+    delete s._ghostWeight;
+    delete s._ghostReps;
+    s.reps=undefined;
+    s.weight=undefined;
+    s.rpe=undefined;
     const ri=document.getElementById(`ri-${ei}-${si}`);
     const wi=document.getElementById(`wi-${ei}-${si}`);
+    const rpe=document.getElementById(`rpesel-${ei}-${si}`);
+    if(ri)ri.value='';
+    if(wi)wi.value='';
+    if(rpe){rpe.value='';rpe.className='rpe-select rpe-none';}
     if(ri)ri.style.color='';
     if(wi)wi.style.color='';
     el.select();
@@ -2368,6 +2422,13 @@ function setRPE(ei,si,val){
   if(!wo)return;
   const s=wo.exercises[ei].sets[si];
   if(!s)return;
+  if(s._ghost){
+    s._ghost=false;
+    delete s._ghostWeight;
+    delete s._ghostReps;
+    s.reps=undefined;
+    s.weight=undefined;
+  }
   s.rpe=val||undefined;
   // Update just the select's class without full re-render
   const sel=document.getElementById(`rpesel-${ei}-${si}`);
@@ -2558,9 +2619,10 @@ function stopRestTimer(){
 function openFinishModal(){
   swReset();
   const duration=Math.floor((Date.now()-activeWorkout.startTime)/1000);
-  const vol=calcActiveVolume();
-  const sets=countSets(activeWorkout);
-  const prs=detectPRs(activeWorkout);
+  const cleaned=cleanWorkoutForSave(activeWorkout);
+  const vol=calcVolume(cleaned);
+  const sets=countSets(cleaned);
+  const prs=detectPRs(cleaned);
   const ml=document.getElementById('modal-layer');
   ml.innerHTML=`
   <div class="modal-bg open" id="finish-modal">
@@ -2586,16 +2648,35 @@ function openFinishModal(){
   </div>`;
 }
 function closeFinish(){document.getElementById('finish-modal').remove();}
+function cleanWorkoutForSave(wo){
+  return {
+    ...wo,
+    exercises:wo.exercises.map(ex=>({
+      ...ex,
+      sets:ex.sets.map(set=>{
+        const {_ghost,_ghostWeight,_ghostReps,_progressed,...clean}=set;
+        if(_ghost){
+          clean.reps=undefined;
+          clean.weight=undefined;
+          clean.rpe=undefined;
+          clean.notes=undefined;
+        }
+        return clean;
+      })
+    }))
+  };
+}
 function saveWorkout(){
   const duration=Math.floor((Date.now()-activeWorkout.startTime)/1000);
-  const prs=detectPRs(activeWorkout);
+  const cleaned=cleanWorkoutForSave(activeWorkout);
+  const prs=detectPRs(cleaned);
   const notes=document.getElementById('finish-notes');
   workouts.push({
     id:Date.now(),
-    name:activeWorkout.name||getDefaultWorkoutName(),
+    name:cleaned.name||getDefaultWorkoutName(),
     date:new Date().toISOString(),
     duration,
-    exercises:activeWorkout.exercises,
+    exercises:cleaned.exercises,
     notes:notes?notes.value:'',
     prs:prs.map(p=>p.name)
   });
@@ -3016,7 +3097,7 @@ function calcVolume(w){
     },0);
   },0);
 }
-function calcActiveVolume(){return activeWorkout?calcVolume(activeWorkout):0;}
+function calcActiveVolume(){return activeWorkout?calcVolume(cleanWorkoutForSave(activeWorkout)):0;}
 function countSets(w){
   return w.exercises.reduce((s,e)=>s+e.sets.filter(set=>{
     if(e.type==='cardio')return set.dist||set.duration;
@@ -3097,7 +3178,10 @@ function getAllPRs(){
   return Object.values(best).sort((a,b)=>new Date(b.date)-new Date(a.date));
 }
 function getExerciseHistory(name){
-  return workouts.filter(w=>w.exercises.some(e=>e.name===name)).map(w=>({date:w.date,sets:w.exercises.find(e=>e.name===name).sets}));
+  return workouts.filter(w=>w.exercises.some(e=>e.name===name)).map(w=>{
+    const ex=w.exercises.find(e=>e.name===name);
+    return {date:w.date,sets:ex.sets,notes:ex.notes};
+  });
 }
 function getExercisesWithHistory(){
   const names=new Set();
@@ -3740,15 +3824,10 @@ function startFromTemplate(i){
     if(hist.length){
       const lastSets=hist[hist.length-1].sets.filter(s=>s.reps||s.weight);
       if(lastSets.length){
-        // Apply +2.5kg progressive overload if RPE was easy/moderate last time
-        const avgRpe=lastSets.filter(s=>s.rpe).map(s=>({easy:1,moderate:2,challenging:3,max_effort:4}[s.rpe]||0));
-        const rpeAvg=avgRpe.length?avgRpe.reduce((a,b)=>a+b,0)/avgRpe.length:3;
-        const bump=rpeAvg<=2.5?2.5:0; // only bump if not grinding
         sets=lastSets.map((s,idx)=>({
-          reps:s.reps,
-          weight:s.weight?(Math.round((parseFloat(s.weight)+bump)*4)/4):undefined,
-          _progressed:bump>0&&s.weight,
-          notes:s.notes||(e.sets&&e.sets[idx]?e.sets[idx].notes:undefined),
+          _ghostReps:s.reps,
+          _ghostWeight:s.weight,
+          notes:e.sets&&e.sets[idx]?e.sets[idx].notes:undefined,
           _ghost:true
         }));
       }
